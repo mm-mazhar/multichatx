@@ -46,6 +46,11 @@
 
   "postCreateCommand": "bash .devcontainer/post-create.sh",
 
+  // Runs on every start AND resume. A stopped Codespace stops its containers;
+  // without this, Redis and Postgres are down on resume and the app fails in
+  // confusing ways (better-auth 404s because trustedOrigins cannot read Redis).
+  "postStartCommand": "docker compose up -d",
+
   "customizations": {
     "vscode": {
       "extensions": [

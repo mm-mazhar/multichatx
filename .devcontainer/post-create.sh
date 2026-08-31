@@ -32,6 +32,31 @@ else
   sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -hex 32)|" .env
   sed -i "s|^REALTIME_BROADCAST_SECRET=.*|REALTIME_BROADCAST_SECRET=$(openssl rand -hex 32)|" .env
 
+  # Force IPv4 on every backend connection. Node 17+ resolves `localhost`
+  # verbatim, which usually yields ::1 first; inside Docker-in-Docker the IPv6
+  # publish goes through Docker's userland proxy and black-holes, so connections
+  # hang until they ETIMEDOUT instead of failing fast. That surfaces as
+  # better-auth returning 404 (trustedOrigins -> listActiveDomains -> Redis).
+  # Only server-side URLs — the NEXT_PUBLIC_* ones are browser-facing.
+  sed -i \
+    -e 's|^DATABASE_URL=postgresql://\(.*\)@localhost:|DATABASE_URL=postgresql://\1@127.0.0.1:|' \
+    -e 's|^REDIS_URL=redis://localhost:|REDIS_URL=redis://127.0.0.1:|' \
+    -e 's|^S3_ENDPOINT=http://localhost:|S3_ENDPOINT=http://127.0.0.1:|' \
+    -e 's|^JAVASCRIPT_EXECUTOR_URL=http://localhost:|JAVASCRIPT_EXECUTOR_URL=http://127.0.0.1:|' \
+    -e 's|@localhost:1025|@127.0.0.1:1025|' \
+    .env
+
+  # Codespaces serves the app from a forwarded *.app.github.dev origin. better-auth
+  # builds trustedOrigins from NEXT_PUBLIC_BUILDER_URL, so leaving these at
+  # localhost makes every auth request a 404 in the browser editor. Harmless when
+  # connecting from VS Code Desktop, where localhost forwarding applies.
+  if [ -n "${CODESPACE_NAME:-}" ] && [ -n "${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-}" ]; then
+    APP_URL="https://${CODESPACE_NAME}-3123.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"
+    sed -i "s|^NEXT_PUBLIC_BUILDER_URL=.*|NEXT_PUBLIC_BUILDER_URL=${APP_URL}|" .env
+    sed -i "s|^BETTER_AUTH_URL=.*|BETTER_AUTH_URL=${APP_URL}|" .env
+    say "App URL set to ${APP_URL}"
+  fi
+
   # Grants /admin access. Prefer an explicit Codespaces secret; fall back to the
   # git identity Codespaces populates from the GitHub account.
   ADMIN_EMAIL="${PLATFORM_ADMIN_EMAIL:-$(git config --get user.email || true)}"
@@ -84,19 +109,21 @@ cat <<'DONE'
   MailHog :8025 catches every outbound email — nothing is really sent.
   Adminer :8080 · RedisInsight :5540 · RustFS console :9001
 
-  NOTE ON URLs
-  Connecting from VS Code Desktop? Ports forward to your real localhost,
-  so http://localhost:3123 works and .env is correct as shipped.
+  NOTE ON URLs — .env is configured for the BROWSER editor
+  NEXT_PUBLIC_BUILDER_URL and BETTER_AUTH_URL point at this Codespace's
+  forwarded *.app.github.dev origin, because better-auth builds its
+  trustedOrigins list from them and rejects any request from an origin it
+  does not recognise (it answers 404, which looks nothing like an origin
+  problem).
 
-  Using the browser-based editor instead? The app is served from a
-  forwarded *.app.github.dev URL, and sign-in will fail until .env agrees:
+  Switching to VS Code Desktop? It forwards ports to your real localhost,
+  so set both back or auth breaks the other way:
 
-    URL="https://${CODESPACE_NAME}-3123.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"
-    sed -i "s|^NEXT_PUBLIC_BUILDER_URL=.*|NEXT_PUBLIC_BUILDER_URL=$URL|" .env
-    sed -i "s|^BETTER_AUTH_URL=.*|BETTER_AUTH_URL=$URL|" .env
+    sed -i "s|^NEXT_PUBLIC_BUILDER_URL=.*|NEXT_PUBLIC_BUILDER_URL=http://localhost:3123|" .env
+    sed -i "s|^BETTER_AUTH_URL=.*|BETTER_AUTH_URL=http://localhost:3123|" .env
 
-  Also set port 3123's visibility to Public in the Ports panel, or the
-  browser cannot reach it.
+  Backend connections use 127.0.0.1, not localhost, on purpose — see the
+  comment in this script. Do not "tidy" them back.
 ────────────────────────────────────────────────────────────────────────
 
 DONE
