@@ -32,11 +32,10 @@ else
   sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -hex 32)|" .env
   sed -i "s|^REALTIME_BROADCAST_SECRET=.*|REALTIME_BROADCAST_SECRET=$(openssl rand -hex 32)|" .env
 
-  # Force IPv4 on every backend connection. Node 17+ resolves `localhost`
-  # verbatim, which usually yields ::1 first; inside Docker-in-Docker the IPv6
-  # publish goes through Docker's userland proxy and black-holes, so connections
-  # hang until they ETIMEDOUT instead of failing fast. That surfaces as
-  # better-auth returning 404 (trustedOrigins -> listActiveDomains -> Redis).
+  # Pin backend connections to IPv4. In a Codespace `localhost` resolves ONLY to
+  # ::1; Docker publishes on both stacks and both work (measured: Postgres 15-25ms
+  # on either), so this is defensive hygiene, not a fix for a known fault. It just
+  # takes DNS resolution order off the table when something else goes wrong.
   # Only server-side URLs — the NEXT_PUBLIC_* ones are browser-facing.
   sed -i \
     -e 's|^DATABASE_URL=postgresql://\(.*\)@localhost:|DATABASE_URL=postgresql://\1@127.0.0.1:|' \
