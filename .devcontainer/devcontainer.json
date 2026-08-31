@@ -1,0 +1,66 @@
+{
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
+  "name": "multichatx",
+
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+
+  "features": {
+    // Pinned to .nvmrc. Corepack then resolves pnpm from package.json's
+    // `packageManager` field, so the container matches CI exactly.
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24.11.0"
+    },
+    // Required for `docker compose up -d` inside the Codespace. Keeps
+    // docker-compose.yml untouched, so it stays identical to local and to
+    // upstream — no merge surface.
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+
+  // 4 cores is the practical floor for this monorepo. 8 is noticeably better
+  // but burns the free core-hour allowance twice as fast; start here.
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+
+  "forwardPorts": [3123, 1999, 3210, 8025, 8080, 5540, 9001, 5432, 6379],
+
+  "portsAttributes": {
+    "3123": { "label": "Builder (Next.js)", "onAutoForward": "notify" },
+    "1999": { "label": "Realtime (PartyKit)", "onAutoForward": "silent" },
+    "3210": { "label": "JS executor", "onAutoForward": "silent" },
+    "8025": {
+      "label": "MailHog — all outbound email",
+      "onAutoForward": "silent"
+    },
+    "8080": {
+      "label": "Adminer — database browser",
+      "onAutoForward": "silent"
+    },
+    "5540": { "label": "RedisInsight", "onAutoForward": "silent" },
+    "9001": { "label": "RustFS console (S3)", "onAutoForward": "silent" },
+    "5432": { "label": "Postgres", "onAutoForward": "silent" },
+    "6379": { "label": "Redis", "onAutoForward": "silent" }
+  },
+
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "biomejs.biome",
+        "bradlc.vscode-tailwindcss",
+        "ms-azuretools.vscode-docker",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "biomejs.biome",
+        "editor.formatOnSave": true,
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  "remoteUser": "vscode"
+}
