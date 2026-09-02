@@ -61,3 +61,6 @@ CLAUDE.md
 
 .pnpm-store/
 .plans/
+
+# Windows mark-of-the-web sidecars — break checkout on NTFS
+*:Zone.Identifier
